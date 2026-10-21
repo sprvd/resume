@@ -120,6 +120,7 @@ h1 {
   margin: 0;
   font-size: 0.86rem;
 }
+.contacts > div { display: contents; }
 .contacts dt { color: var(--muted); }
 .contacts dt::after { content: ':'; }
 .contacts dd { margin: 0; }

@@ -10,36 +10,38 @@
     --panel: #fff;
   }
 
-  body { font: 10.2pt/1.4 'Inter', Helvetica, Arial, sans-serif; background: #fff; }
+  body { font: 10.4pt/1.38 'Source Serif 4', Georgia, 'Times New Roman', serif; background: #fff; }
   #scene, .head-top, .cursor { display: none !important; }
   .page { max-width: none; padding: 0; }
   .head, .prose { background: none; border: 0; box-shadow: none; padding: 0; }
   .head { text-align: center; margin-bottom: 4pt; }
 
-  h1 { font: 700 22pt/1.1 'Inter', Helvetica, Arial, sans-serif; letter-spacing: 0; margin: 0 0 2pt; }
-  .role { margin: 0 0 4pt; color: #000; font-size: 10.4pt; }
+  h1 { font: 700 23pt/1.1 'Source Serif 4', Georgia, 'Times New Roman', serif; letter-spacing: 0; margin: 0 0 2pt; }
+  .role { margin: 0 0 5pt; color: #000; font-size: 10.6pt; font-style: italic; }
   .role::before { content: none; }
 
   .contacts {
-    display: grid;
-    grid-template-columns: repeat(3, max-content max-content);
+    display: flex;
+    flex-wrap: wrap;
     justify-content: center;
-    gap: 2pt 4pt;
+    gap: 2pt 22pt;
     margin: 0;
-    font-size: 9.2pt;
-    text-align: left;
+    font-size: 9.4pt;
   }
-  .contacts dt, .contacts dd { margin: 0; }
+  .contacts > div { display: block; }
+  .contacts > div:nth-child(-n + 3) { order: 1; }
+  .contacts::before { content: ''; order: 2; flex-basis: 100%; height: 0; }
+  .contacts > div:nth-child(n + 4) { order: 3; }
+  .contacts dt, .contacts dd { display: inline; margin: 0; }
   .contacts dt { color: #444; }
-  .contacts dt::after { content: ':'; }
-  .contacts dd { margin-right: 22pt; }
+  .contacts dt::after { content: ': '; white-space: pre; }
 
   .prose h2 {
     margin: 11pt 0 4pt;
     padding-bottom: 2pt;
-    font: 700 9.8pt/1.2 'Inter', Helvetica, Arial, sans-serif;
+    font: 700 9.6pt/1.2 'Source Serif 4', Georgia, 'Times New Roman', serif;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.08em;
     border-bottom: 0.6pt solid #000;
     color: #000;
   }

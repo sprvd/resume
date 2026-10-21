@@ -28,7 +28,7 @@ const pdfHref = `${base}resume_${lang}.pdf`;
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap"
     />
     <script is:inline>
       try { if (localStorage.getItem('mono') === '1') document.documentElement.dataset.mono = '1'; } catch {}
@@ -42,8 +42,8 @@ const pdfHref = `${base}resume_${lang}.pdf`;
         <div class="head-top">
           <p class="prompt"><span class="ps">$</span> cat resume.md<span class="cursor" aria-hidden="true">█</span></p>
           <nav class="actions" aria-label="Actions">
-            <button class="btn" id="mono" type="button" aria-pressed="false" title="monochrome">mono</button>
             <button class="btn" id="hide" type="button" title="hide text, show only the scene (Esc)">hide</button>
+            <button class="btn" id="mono" type="button" aria-pressed="false" title="monochrome">mono</button>
             <a class="btn" href={altHref} hreflang={lang === 'en' ? 'ru' : 'en'}>{ui.switchTo}</a>
             <a class="btn btn-primary" href={pdfHref} download>{ui.pdf} ↓</a>
           </nav>
@@ -51,11 +51,11 @@ const pdfHref = `${base}resume_${lang}.pdf`;
         <h1>{name}</h1>
         <p class="role">{title} <span class="muted">· {location}</span></p>
         <dl class="contacts">
-          <dt>{ui.phone}</dt><dd><a href={`tel:${contacts.phone.replace(/[^+\d]/g, '')}`}>{contacts.phone}</a></dd>
-          <dt>telegram</dt><dd><a href={`https://t.me/${contacts.telegram}`}>@{contacts.telegram}</a></dd>
-          <dt>email</dt><dd><a href={`mailto:${contacts.email}`}>{contacts.email}</a></dd>
-          <dt>linkedin</dt><dd><a href={`https://www.linkedin.com/in/${contacts.linkedin}/`}>in/{contacts.linkedin}</a></dd>
-          <dt>github</dt><dd><a href={`https://github.com/${contacts.github}`}>{contacts.github}</a></dd>
+          <div><dt>{ui.phone}</dt><dd><a href={`tel:${contacts.phone.replace(/[^+\d]/g, '')}`}>{contacts.phone}</a></dd></div>
+          <div><dt>telegram</dt><dd><a href={`https://t.me/${contacts.telegram}`}>@{contacts.telegram}</a></dd></div>
+          <div><dt>email</dt><dd><a href={`mailto:${contacts.email}`}>{contacts.email}</a></dd></div>
+          <div><dt>linkedin</dt><dd><a href={`https://www.linkedin.com/in/${contacts.linkedin}/`}>in/{contacts.linkedin}</a></dd></div>
+          <div><dt>github</dt><dd><a href={`https://github.com/${contacts.github}`}>{contacts.github}</a></dd></div>
         </dl>
       </header>
 
