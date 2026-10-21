@@ -1,4 +1,5 @@
 import { mix, scale } from './util.js';
+import { drawSillCat } from './cat.js';
 
 const CERAMIC = [214, 208, 192];
 const TERRACOTTA = [178, 94, 66];
@@ -39,8 +40,11 @@ export function drawForeground(ctx) {
   for (let r = ft; r < sillTop; r++) { buf.tint(ft, r, [0, 0, 0], 0.16); buf.tint(cols - ft - 1, r, [0, 0, 0], 0.16); }
 
   if (cols < 64) return;
-  drawMug(buf, Math.round(cols * 0.1), sillTop, time, clock);
-  drawPlant(buf, cols - Math.round(cols * 0.1) - 6, sillTop, clock.season, time);
+  // cat on the left; mug and plant on the right, clear of the text column
+  drawSillCat(ctx, ft + 3, sillTop - 1);
+  const plantX = cols - ft - 8;
+  drawMug(buf, plantX - 10, sillTop, time, clock);
+  drawPlant(buf, plantX, sillTop, clock.season, time);
 }
 
 function drawMug(buf, x, sill, time, clock) {

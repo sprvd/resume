@@ -112,6 +112,7 @@ h1 {
 
 .role { margin: 0 0 16px; color: var(--accent); font-size: 0.95rem; }
 .role::before { content: '> '; color: var(--muted); }
+.role .muted { white-space: nowrap; }
 
 .contacts {
   display: grid;
@@ -159,8 +160,12 @@ a:hover { text-decoration-color: var(--accent); color: var(--accent); }
 
 @media (max-width: 560px) {
   body { font-size: 13.5px; }
-  /* leave the top of the screen to the window scene; the panels scroll over it */
-  .page { padding: 34vh 12px 40px; padding-top: 34svh; }
+  .page { padding: 12px 12px 40px; }
+  /* let the scene show through the panels; `hide` gives the full view */
+  .head { background: rgba(6, 8, 11, 0.8); }
+  .prose { background: rgba(6, 8, 11, 0.9); }
+  :root[data-mono='1'] .head { background: rgba(4, 4, 4, 0.8); }
+  :root[data-mono='1'] .prose { background: rgba(4, 4, 4, 0.9); }
   .head { padding: 16px 16px 18px; }
   .prose { padding: 2px 16px 22px; }
   .actions { width: 100%; }

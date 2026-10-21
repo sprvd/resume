@@ -55,6 +55,6 @@ ML Engineer with 2 years of commercial experience. Focus areas: LLM services and
 
 ## Education
 
-### HSE University, Specialist Degree (5-year) in Computer and Information Systems Security
+### HSE University, Specialist Degree in Computer and Information Systems Security
 
 *2022 - 2028 (expected)*

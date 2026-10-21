@@ -6,6 +6,7 @@ import { drawSky } from './sky.js';
 import { buildSkyline, drawCityLayer, createStreet, updateStreet, drawStreet } from './city.js';
 import { createWeather, updateWeather, drawWeather, drawFog, drawGlass } from './weather.js';
 import { drawForeground } from './window.js';
+import { pickRoofCat, drawRoofCat } from './cat.js';
 
 const canvas = document.getElementById('scene');
 const params = new URLSearchParams(location.search);
@@ -46,6 +47,7 @@ function start(canvas) {
     ctx.horizon = rows > cols * 1.2 ? Math.round(rows * 0.4) : rows - Math.max(12, Math.round(rows * 0.22));
     buf.resize(cols, rows);
     skyline = buildSkyline(cols, ctx.horizon);
+    ctx.roofCat = pickRoofCat(skyline[2], cols, ctx.horizon);
     street = createStreet(cols, rows, ctx.horizon);
     weather = createWeather(clockAt(0).season, cols, rows, ctx.horizon);
   };
@@ -80,6 +82,7 @@ function start(canvas) {
     drawCityLayer(ctx, skyline[2]);
     drawStreet(ctx, street);
     buf.asciify();
+    drawRoofCat(ctx);
     drawWeather(ctx, weather, street);
     drawGlass(ctx, weather);
     drawForeground(ctx);
