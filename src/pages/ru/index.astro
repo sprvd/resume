@@ -1,0 +1,9 @@
+---
+import { getEntry } from 'astro:content';
+import Resume from '../../layouts/Resume.astro';
+
+const entry = await getEntry('resume', 'ru');
+if (!entry) throw new Error('content/resume/ru.md not found');
+---
+
+<Resume entry={entry} altHref={import.meta.env.BASE_URL} />

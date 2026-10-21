@@ -1,0 +1,56 @@
+@media print {
+  @page { size: A4; margin: 10mm; }
+
+  :root {
+    --bg: #fff;
+    --fg: #000;
+    --muted: #333;
+    --line: #bbb;
+    --accent: #000;
+    --panel: #fff;
+  }
+
+  body { font: 10.2pt/1.4 'Inter', Helvetica, Arial, sans-serif; background: #fff; }
+  #scene, .head-top, .cursor { display: none !important; }
+  .page { max-width: none; padding: 0; }
+  .head, .prose { background: none; border: 0; box-shadow: none; padding: 0; }
+  .head { text-align: center; margin-bottom: 4pt; }
+
+  h1 { font: 700 22pt/1.1 'Inter', Helvetica, Arial, sans-serif; letter-spacing: 0; margin: 0 0 2pt; }
+  .role { margin: 0 0 4pt; color: #000; font-size: 10.4pt; }
+  .role::before { content: none; }
+
+  .contacts {
+    display: grid;
+    grid-template-columns: repeat(3, max-content max-content);
+    justify-content: center;
+    gap: 2pt 4pt;
+    margin: 0;
+    font-size: 9.2pt;
+    text-align: left;
+  }
+  .contacts dt, .contacts dd { margin: 0; }
+  .contacts dt { color: #444; }
+  .contacts dt::after { content: ':'; }
+  .contacts dd { margin-right: 22pt; }
+
+  .prose h2 {
+    margin: 11pt 0 4pt;
+    padding-bottom: 2pt;
+    font: 700 9.8pt/1.2 'Inter', Helvetica, Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 0.6pt solid #000;
+    color: #000;
+  }
+  .prose h2::before, .prose h2::after { content: none; }
+  .prose h3 { margin: 7pt 0 0; font-size: 10.6pt; }
+  .prose p:has(> em:only-child) { font-size: 9pt; margin: 0 0 2pt; color: #333; }
+  .prose p > em:only-child { font-style: italic; }
+  .prose p > em:only-child::before, .prose p > em:only-child::after { content: none; }
+  .prose ul { margin: 2pt 0; }
+  .prose li { margin: 1.5pt 0; padding-left: 14pt; }
+  .prose li::before { content: '•'; left: 3pt; color: #000; }
+  .prose li > strong:first-child { color: #000; font-weight: 700; }
+  a { text-decoration: none; }
+}
