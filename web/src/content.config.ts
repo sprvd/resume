@@ -3,7 +3,7 @@ import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 
 const resume = defineCollection({
-  loader: glob({ pattern: '*.md', base: './src/content/resume' }),
+  loader: glob({ pattern: '*.md', base: '../resume' }),
   schema: z.object({
     lang: z.enum(['en', 'ru']),
     name: z.string(),
