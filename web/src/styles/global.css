@@ -3,9 +3,10 @@
   --fg: #d9d6cb;
   --muted: #7d8590;
   --line: rgba(217, 214, 203, 0.22);
-  --accent: #8fcfa0;
+  --accent: #f4f2ec;
   --panel: rgba(6, 8, 11, 0.93);
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
 }
 
 * { box-sizing: border-box; }
@@ -98,8 +99,9 @@ body {
 
 h1 {
   margin: 18px 0 4px;
-  font: 600 clamp(1.2rem, 3.6vw, 1.55rem)/1.2 var(--mono);
-  letter-spacing: 0.02em;
+  font: 600 clamp(1.6rem, 5vw, 2.2rem)/1.15 var(--serif);
+  letter-spacing: 0;
+  color: var(--accent);
 }
 .cursor {
   display: inline-block;
@@ -147,18 +149,23 @@ a:hover { text-decoration-color: var(--accent); color: var(--accent); }
   font-weight: 400;
 }
 
-.prose h3 { margin: 20px 0 0; font-size: 0.95rem; font-weight: 700; line-height: 1.45; }
+/* the reading text is serif; section labels, dates and markers stay in the terminal face */
+.prose { font: 400 1.1rem/1.6 var(--serif); }
+.prose h3 { margin: 22px 0 0; font-size: 1.08rem; font-weight: 700; line-height: 1.4; }
+/* a role sits right under its company, its dates right under it */
+.prose h4 { margin: 14px 0 0; font-size: 1rem; font-weight: 600; line-height: 1.4; }
+.prose h3 + h4 { margin-top: 2px; }
 .prose p { margin: 8px 0; }
-.prose p:has(> em:only-child) { margin: 0 0 8px; color: var(--muted); font-size: 0.8rem; }
+.prose p:has(> em:only-child) { margin: 2px 0 8px; color: var(--muted); font: 400 0.74rem/1.5 var(--mono); }
 .prose p > em:only-child { font-style: normal; }
 .prose p > em:only-child::before { content: '[ '; }
 .prose p > em:only-child::after { content: ' ]'; }
 
 .prose ul { list-style: none; margin: 8px 0; padding: 0; }
 .prose li { position: relative; margin: 6px 0; padding-left: 22px; }
-.prose li::before { content: '>'; position: absolute; left: 4px; color: var(--accent); }
+.prose li::before { content: '>'; position: absolute; left: 4px; color: var(--accent); font: 400 0.82em/1.95 var(--mono); }
 .prose strong { color: var(--fg); font-weight: 700; }
-.prose li > strong:first-child { color: var(--accent); font-weight: 500; }
+.prose li > strong:first-child { color: var(--accent); font-weight: 600; }
 
 @media (max-width: 560px) {
   body { font-size: 13.5px; }
