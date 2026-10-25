@@ -3,7 +3,7 @@
   --fg: #d9d6cb;
   --muted: #7d8590;
   --line: rgba(217, 214, 203, 0.22);
-  --accent: #e8c46a;
+  --accent: #8fcfa0;
   --panel: rgba(6, 8, 11, 0.93);
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
@@ -98,8 +98,8 @@ body {
 
 h1 {
   margin: 18px 0 4px;
-  font: 700 clamp(1.35rem, 4.4vw, 1.9rem)/1.15 var(--mono);
-  letter-spacing: -0.04em;
+  font: 600 clamp(1.2rem, 3.6vw, 1.55rem)/1.2 var(--mono);
+  letter-spacing: 0.02em;
 }
 .cursor {
   display: inline-block;
