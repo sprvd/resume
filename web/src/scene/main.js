@@ -65,7 +65,6 @@ function start(canvas) {
     if (reduced) t.redraw();
   });
   t.setup(fit);
-  window.addEventListener('mono-change', () => reduced && t.redraw());
 
   t.draw(() => {
     const { cols, rows } = t.grid;
@@ -100,7 +99,6 @@ function start(canvas) {
     drawForeground(ctx);
     drawSill?.(ctx, t.grid, sillRow(rows));
 
-    buf.mono = document.documentElement.dataset.mono === '1';
     buf.flush(t);
     if (reduced) t.noLoop();
   });

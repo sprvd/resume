@@ -2,19 +2,10 @@ import { hash2 } from './util.js';
 
 const RAMP = [' ', '.', ':', '-', '=', '+', '*', '#', '%'];
 
-/** Single-hue version of a colour, keeping its brightness. */
-function tint(a, k) {
-  const l = Math.min(1, ((0.299 * a[k] + 0.587 * a[k + 1] + 0.114 * a[k + 2]) / 255) ** 0.85 * 1.08);
-  return [MONO[0] * l, MONO[1] * l, MONO[2] * l];
-}
-
 /** Back buffer of terminal cells; layers write into it, flush() draws it through textmode.js. */
-const MONO = [255, 255, 255];
-
 export class CellBuffer {
   cols = 0;
   rows = 0;
-  mono = false;
   /** 0 at night, 1 in full daylight: lifts the dark backing and the glyph brightness. */
   lift = 0;
 
@@ -158,13 +149,8 @@ export class CellBuffer {
         t.push();
         t.translate(c + n / 2 - ox, r + 0.5 - oy);
         t.char(ch[i]);
-        if (this.mono) {
-          t.charColor(...tint(fg, i * 3));
-          t.cellColor(...tint(bg, i * 3));
-        } else {
-          t.charColor(fg[i * 3], fg[i * 3 + 1], fg[i * 3 + 2]);
-          t.cellColor(bg[i * 3], bg[i * 3 + 1], bg[i * 3 + 2]);
-        }
+        t.charColor(fg[i * 3], fg[i * 3 + 1], fg[i * 3 + 2]);
+        t.cellColor(bg[i * 3], bg[i * 3 + 1], bg[i * 3 + 2]);
         t.rect(n, 1);
         t.pop();
         c += n;

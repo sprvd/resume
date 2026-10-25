@@ -8,16 +8,6 @@
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
-/* monochrome: black, white and greys; the scene is desaturated in buffer.js */
-:root[data-mono='1'] {
-  --bg: #050505;
-  --fg: #e4e4e4;
-  --muted: #8a8a8a;
-  --line: rgba(255, 255, 255, 0.24);
-  --accent: #ffffff;
-  --panel: rgba(4, 4, 4, 0.93);
-}
-
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 
@@ -50,7 +40,6 @@ body {
   display: block;
   pointer-events: none;
 }
-:root[data-mono='1'] #sill { filter: grayscale(1); }
 
 .page {
   transition: opacity 0.25s;
@@ -177,8 +166,6 @@ a:hover { text-decoration-color: var(--accent); color: var(--accent); }
   /* let the scene show through the panels; `hide` gives the full view */
   .head { background: rgba(6, 8, 11, 0.8); }
   .prose { background: rgba(6, 8, 11, 0.9); }
-  :root[data-mono='1'] .head { background: rgba(4, 4, 4, 0.8); }
-  :root[data-mono='1'] .prose { background: rgba(4, 4, 4, 0.9); }
   .head { padding: 16px 16px 18px; }
   .prose { padding: 2px 16px 22px; }
   .actions { width: 100%; }

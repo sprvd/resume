@@ -30,9 +30,6 @@ const pdfHref = `${base}resume_${lang}.pdf`;
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap"
     />
-    <script is:inline>
-      try { if (localStorage.getItem('mono') === '1') document.documentElement.dataset.mono = '1'; } catch {}
-    </script>
   </head>
   <body>
     <canvas id="scene" aria-hidden="true"></canvas>
@@ -44,7 +41,6 @@ const pdfHref = `${base}resume_${lang}.pdf`;
           <p class="prompt"><span class="ps">$</span> cat resume.md<span class="cursor" aria-hidden="true">█</span></p>
           <nav class="actions" aria-label="Actions">
             <button class="btn" id="hide" type="button" title="hide text, show only the scene (Esc)">hide</button>
-            <button class="btn" id="mono" type="button" aria-pressed="false" title="monochrome">mono</button>
             <a class="btn" href={altHref} hreflang={lang === 'en' ? 'ru' : 'en'}>{ui.switchTo}</a>
             <a class="btn btn-primary" href={pdfHref} download>{ui.pdf} ↓</a>
           </nav>
@@ -70,17 +66,7 @@ const pdfHref = `${base}resume_${lang}.pdf`;
     <script>
       import '../scene/main.js';
 
-      const btn = document.getElementById('mono');
       const root = document.documentElement;
-      const sync = () => btn?.setAttribute('aria-pressed', String(root.dataset.mono === '1'));
-      sync();
-      btn?.addEventListener('click', () => {
-        if (root.dataset.mono === '1') delete root.dataset.mono;
-        else root.dataset.mono = '1';
-        try { localStorage.setItem('mono', root.dataset.mono === '1' ? '1' : '0'); } catch {}
-        sync();
-        window.dispatchEvent(new Event('mono-change'));
-      });
 
       // hide the text and leave just the scene
       const unhide = document.getElementById('unhide');
