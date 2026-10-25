@@ -149,23 +149,21 @@ a:hover { text-decoration-color: var(--accent); color: var(--accent); }
   font-weight: 400;
 }
 
-/* the reading text is serif; section labels, dates and markers stay in the terminal face */
-.prose { font: 400 1.1rem/1.6 var(--serif); }
-.prose h3 { margin: 22px 0 0; font-size: 1.08rem; font-weight: 700; line-height: 1.4; }
+.prose h3 { margin: 20px 0 0; font-size: 0.95rem; font-weight: 700; line-height: 1.45; }
 /* a role sits right under its company, its dates right under it */
-.prose h4 { margin: 14px 0 0; font-size: 1rem; font-weight: 600; line-height: 1.4; }
+.prose h4 { margin: 14px 0 0; font-size: 0.9rem; font-weight: 700; line-height: 1.45; }
 .prose h3 + h4 { margin-top: 2px; }
 .prose p { margin: 8px 0; }
-.prose p:has(> em:only-child) { margin: 2px 0 8px; color: var(--muted); font: 400 0.74rem/1.5 var(--mono); }
+.prose p:has(> em:only-child) { margin: 0 0 8px; color: var(--muted); font-size: 0.8rem; }
 .prose p > em:only-child { font-style: normal; }
 .prose p > em:only-child::before { content: '[ '; }
 .prose p > em:only-child::after { content: ' ]'; }
 
 .prose ul { list-style: none; margin: 8px 0; padding: 0; }
 .prose li { position: relative; margin: 6px 0; padding-left: 22px; }
-.prose li::before { content: '>'; position: absolute; left: 4px; color: var(--accent); font: 400 0.82em/1.95 var(--mono); }
+.prose li::before { content: '>'; position: absolute; left: 4px; color: var(--accent); }
 .prose strong { color: var(--fg); font-weight: 700; }
-.prose li > strong:first-child { color: var(--accent); font-weight: 600; }
+.prose li > strong:first-child { color: var(--accent); font-weight: 500; }
 
 @media (max-width: 560px) {
   body { font-size: 13.5px; }

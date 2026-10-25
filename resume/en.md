@@ -1,6 +1,6 @@
 ---
 lang: en
-name: Daniil Spiridonov
+name: Daniel Spiridonov
 title: Machine Learning Engineer
 location: Moscow, Russia
 contacts:
