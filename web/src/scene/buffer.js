@@ -15,6 +15,8 @@ export class CellBuffer {
   cols = 0;
   rows = 0;
   mono = false;
+  /** 0 at night, 1 in full daylight: lifts the dark backing and the glyph brightness. */
+  lift = 0;
 
   resize(cols, rows) {
     this.cols = cols;
@@ -125,14 +127,15 @@ export class CellBuffer {
           const cover = 0.12 + 0.52 * Math.min(1, lum) + (hash2(c, r, 77) - 0.5) * 0.36;
           ch[i] = RAMP[Math.max(0, Math.min(RAMP.length - 1, Math.round(cover * (RAMP.length - 1))))];
           // brighten the glyph but keep its hue
-          const f = Math.min(1.6, 215 / Math.max(R, G, B, 1));
+          const f = Math.min(1.6, (215 + 35 * this.lift) / Math.max(R, G, B, 1));
           fg[k] = R * f;
           fg[k + 1] = G * f;
           fg[k + 2] = B * f;
         }
-        bg[k] = R * 0.42;
-        bg[k + 1] = G * 0.42;
-        bg[k + 2] = B * 0.42;
+        const back = 0.42 + 0.3 * this.lift;
+        bg[k] = R * back;
+        bg[k + 1] = G * back;
+        bg[k + 2] = B * back;
       }
     }
   }

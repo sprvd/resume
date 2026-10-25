@@ -11,7 +11,7 @@
   }
 
   body { font: 10.4pt/1.38 'Source Serif 4', Georgia, 'Times New Roman', serif; background: #fff; }
-  #scene, .head-top, .cursor { display: none !important; }
+  #scene, #sill, .head-top, .cursor { display: none !important; }
   .page { max-width: none; padding: 0; }
   .head, .prose { background: none; border: 0; box-shadow: none; padding: 0; }
   .head { text-align: center; margin-bottom: 4pt; }

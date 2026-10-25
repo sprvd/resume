@@ -5,7 +5,8 @@ import { getPalette } from './palette.js';
 import { drawSky } from './sky.js';
 import { buildSkyline, drawCityLayer, createStreet, updateStreet, drawStreet } from './city.js';
 import { createWeather, updateWeather, drawWeather, drawFog, drawGlass } from './weather.js';
-import { drawForeground } from './window.js';
+import { drawForeground, sillRow } from './window.js';
+import { createSill } from './sill.js';
 
 const canvas = document.getElementById('scene');
 const params = new URLSearchParams(location.search);
@@ -27,10 +28,18 @@ function start(canvas) {
     return;
   }
 
+  const sill = document.getElementById('sill');
   const clockAt = createClock();
+  const drawSill = sill
+    ? createSill(sill, {
+        time: () => ctx.time,
+        skipHours: clockAt.skipHours,
+        nextSeason: clockAt.nextSeason,
+      })
+    : null;
   const buf = new CellBuffer();
   const ctx = { buf, cols: 0, rows: 0, horizon: 0, time: 0, clock: null, pal: null };
-  let skyline, street, weather;
+  let skyline, street, weather, weatherSeason;
   let last = performance.now();
   let elapsed = 0;
 
@@ -47,7 +56,8 @@ function start(canvas) {
     buf.resize(cols, rows);
     skyline = buildSkyline(cols, ctx.horizon);
     street = createStreet(cols, rows, ctx.horizon);
-    weather = createWeather(clockAt(0).season, cols, rows, ctx.horizon);
+    weatherSeason = clockAt(0).season;
+    weather = createWeather(weatherSeason, cols, rows, ctx.horizon);
   };
 
   t.windowResized(() => {
@@ -68,6 +78,10 @@ function start(canvas) {
 
     ctx.time = elapsed;
     ctx.clock = clockAt(elapsed);
+    if (ctx.clock.season !== weatherSeason) {
+      weatherSeason = ctx.clock.season;
+      weather = createWeather(weatherSeason, cols, rows, ctx.horizon);
+    }
     ctx.pal = getPalette(ctx.clock);
 
     updateStreet(street, ctx, dt);
@@ -79,10 +93,12 @@ function start(canvas) {
     drawCityLayer(ctx, skyline[1]);
     drawCityLayer(ctx, skyline[2]);
     drawStreet(ctx, street);
+    buf.lift = ctx.clock.daylight;
     buf.asciify();
     drawWeather(ctx, weather, street);
     drawGlass(ctx, weather);
     drawForeground(ctx);
+    drawSill?.(ctx, t.grid, sillRow(rows));
 
     buf.mono = document.documentElement.dataset.mono === '1';
     buf.flush(t);

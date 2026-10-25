@@ -16,20 +16,30 @@ export function createClock(search = location.search) {
   const q = new URLSearchParams(search);
   const now = new Date();
   const forced = q.get('season');
-  const season = SEASONS.includes(forced) ? forced : SEASONS[SEASON_BY_MONTH[now.getMonth()]];
+  let season = SEASONS.includes(forced) ? forced : SEASONS[SEASON_BY_MONTH[now.getMonth()]];
   const m = /^(\d{1,2}):(\d{2})$/.exec(q.get('time') ?? '');
   const startHour = m ? +m[1] + +m[2] / 60 : now.getHours() + now.getMinutes() / 60;
-  const [rise, set] = SUN[season];
   const phase = moonPhase(now);
-  const nightLen = 24 - set + rise;
+  // time skips ease in over a second or so so the sky sweeps instead of jumping
+  let shift = 0;
+  let target = 0;
+  let last = 0;
 
-  return function clockAt(elapsedSec) {
-    const hour = (startHour + elapsedSec / 3600) % 24;
+  function clockAt(elapsedSec) {
+    shift += (target - shift) * Math.min(1, Math.max(0, elapsedSec - last) * 2.5);
+    last = elapsedSec;
+    const [rise, set] = SUN[season];
+    const nightLen = 24 - set + rise;
+    const hour = (((startHour + elapsedSec / 3600 + shift) % 24) + 24) % 24;
     const sunUp = hour >= rise && hour <= set;
     const daylight = smoothstep(rise - 0.6, rise + 0.7, hour) * (1 - smoothstep(set - 0.7, set + 0.6, hour));
     const edge = Math.min(Math.abs(hour - rise), Math.abs(hour - set));
     const twilight = Math.max(0, 1 - edge / 1.1);
     const bodyP = sunUp ? (hour - rise) / (set - rise) : ((hour >= set ? hour - set : hour + 24 - set)) / nightLen;
     return { season, hour, sunUp, daylight, twilight, night: 1 - daylight, bodyP, moonPhase: phase };
-  };
+  }
+
+  clockAt.skipHours = (h) => { target += h; };
+  clockAt.nextSeason = () => { season = SEASONS[(SEASONS.indexOf(season) + 1) % SEASONS.length]; };
+  return clockAt;
 }
