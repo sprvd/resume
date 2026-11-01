@@ -1,4 +1,5 @@
 import { clamp01, fbm, hash2, mix } from './util.js';
+import { MAT } from './buffer.js';
 
 // Lower threshold = more clouds.
 const CLOUD_THRESHOLD = { winter: 0.52, spring: 0.55, summer: 0.66, autumn: 0.5 };
@@ -53,6 +54,7 @@ export function drawSky(ctx) {
   const threshold = CLOUD_THRESHOLD[clock.season];
 
   // gradient + stars
+  buf.pen = MAT.sky;
   const starVis = clamp01(1 - d * 1.5);
   for (let r = 0; r < horizon; r++) {
     const g = (r / (horizon - 1)) ** 1.4;
@@ -71,11 +73,14 @@ export function drawSky(ctx) {
   }
 
   const body = celestial(ctx);
+  buf.pen = MAT.light;
   if (body.kind === 'sun') drawSun(buf, body, clock);
   else drawMoon(buf, body, clock);
 
   // clouds drift over the sun/moon
-  const drift = time * 0.4;
+  buf.pen = MAT.cloud;
+  // about three cells a second: a slow, steady drift
+  const drift = time * 0.11;
   let cloudCol = mix([64, 70, 104], [248, 249, 252], d);
   cloudCol = mix(cloudCol, [255, 156, 116], clock.twilight * 0.65);
   for (let r = 0; r < horizon; r++) {

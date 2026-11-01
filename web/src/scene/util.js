@@ -46,3 +46,10 @@ export function noise2(x, y, s = 0) {
 
 export const fbm = (x, y, s = 0) =>
   0.6 * noise2(x, y, s) + 0.3 * noise2(x * 2.1, y * 2.1, s + 1) + 0.1 * noise2(x * 4.3, y * 4.3, s + 2);
+
+export const luma = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+
+/** The glyph that draws a line heading at angle `a` (0 = up, clockwise). */
+export const lineGlyph = (a) => ['|', '/', '-', '\\'][((Math.round(a / (Math.PI / 4)) % 4) + 4) % 4];
+
+export const pickOne = (rng, list) => list[Math.floor(rng() * list.length)];

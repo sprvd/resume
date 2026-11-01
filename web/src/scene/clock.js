@@ -39,7 +39,11 @@ export function createClock(search = location.search) {
     return { season, hour, sunUp, daylight, twilight, night: 1 - daylight, bodyP, moonPhase: phase };
   }
 
-  clockAt.skipHours = (h) => { target += h; };
+  /** `instant` skips the ease, for when a hand is being dragged. */
+  clockAt.skipHours = (h, instant = false) => {
+    target += h;
+    if (instant) shift += h;
+  };
   clockAt.nextSeason = () => { season = SEASONS[(SEASONS.indexOf(season) + 1) % SEASONS.length]; };
   return clockAt;
 }

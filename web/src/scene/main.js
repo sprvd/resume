@@ -3,18 +3,21 @@ import { CellBuffer } from './buffer.js';
 import { createClock } from './clock.js';
 import { getPalette } from './palette.js';
 import { drawSky } from './sky.js';
-import { buildSkyline, drawCityLayer, createStreet, updateStreet, drawStreet } from './city.js';
+import { buildSkyline, drawCity } from './city.js';
+import { createStreet, updateStreet, drawStreet } from './street.js';
 import { createWeather, updateWeather, drawWeather, drawFog, drawGlass } from './weather.js';
 import { drawForeground, sillRow } from './window.js';
 import { createSill } from './sill.js';
+import { bindGrid, settlePointer } from './pointer.js';
 
 const canvas = document.getElementById('scene');
 const params = new URLSearchParams(location.search);
 
 if (canvas && !params.has('noscene')) start(canvas);
 
+// UrsaFont is an 8px bitmap font: stay on multiples of 8 so glyphs stay crisp
 function pickFontSize() {
-  return Math.max(10, Math.min(22, Math.round(innerWidth / 120)));
+  return innerWidth >= 2400 ? 16 : innerWidth >= 1700 ? 12 : 8;
 }
 
 function start(canvas) {
@@ -28,8 +31,8 @@ function start(canvas) {
     return;
   }
 
-  const sill = document.getElementById('sill');
   const clockAt = createClock();
+  const sill = document.getElementById('sill');
   const drawSill = sill
     ? createSill(sill, {
         time: () => ctx.time,
@@ -38,14 +41,24 @@ function start(canvas) {
       })
     : null;
   const buf = new CellBuffer();
-  const ctx = { buf, cols: 0, rows: 0, horizon: 0, time: 0, clock: null, pal: null };
+  const ctx = { buf, cols: 0, rows: 0, horizon: 0, time: 0, dt: 0, clock: null, pal: null };
+  // first column the text panel covers; the cat shrinks to stay clear of it
+  let panelCol = Infinity;
   let skyline, street, weather, weatherSeason;
   let last = performance.now();
   let elapsed = 0;
 
+  // second glyph pass, half a cell off the first and screened over it
+  let over = null;
   const fit = () => {
-    t.fontSize(pickFontSize());
+    const fs = pickFontSize();
+    t.fontSize(fs);
     t.resizeCanvas(innerWidth, innerHeight);
+    over?.fontSize(fs);
+    over?.offset(t.grid.cellWidth / 2, t.grid.cellHeight / 2);
+    bindGrid(t.grid);
+    const left = document.querySelector('.head')?.getBoundingClientRect().left;
+    panelCol = left === undefined ? Infinity : (left - t.grid.offsetX) / t.grid.cellWidth;
   };
 
   const rebuild = (cols, rows) => {
@@ -57,14 +70,18 @@ function start(canvas) {
     skyline = buildSkyline(cols, ctx.horizon);
     street = createStreet(cols, rows, ctx.horizon);
     weatherSeason = clockAt(0).season;
-    weather = createWeather(weatherSeason, cols, rows, ctx.horizon);
+    weather = createWeather(weatherSeason, ctx);
   };
 
   t.windowResized(() => {
     fit();
     if (reduced) t.redraw();
   });
-  t.setup(fit);
+  t.setup(() => {
+    over = t.layers.add({ blendMode: t.BLEND_SCREEN, fontSize: pickFontSize() });
+    over.draw(() => buf.flushOver(t));
+    fit();
+  });
 
   t.draw(() => {
     const { cols, rows } = t.grid;
@@ -76,28 +93,27 @@ function start(canvas) {
     elapsed += dt;
 
     ctx.time = elapsed;
+    ctx.dt = dt;
+    settlePointer(dt);
     ctx.clock = clockAt(elapsed);
     if (ctx.clock.season !== weatherSeason) {
       weatherSeason = ctx.clock.season;
-      weather = createWeather(weatherSeason, cols, rows, ctx.horizon);
+      weather = createWeather(weatherSeason, ctx);
     }
     ctx.pal = getPalette(ctx.clock);
 
     updateStreet(street, ctx, dt);
-    updateWeather(weather, ctx, dt);
+    updateWeather(weather, ctx, dt, street);
 
     drawSky(ctx);
-    drawCityLayer(ctx, skyline[0]);
-    drawFog(ctx);
-    drawCityLayer(ctx, skyline[1]);
-    drawCityLayer(ctx, skyline[2]);
+    drawCity(ctx, skyline, drawFog);
     drawStreet(ctx, street);
     buf.lift = ctx.clock.daylight;
     buf.asciify();
     drawWeather(ctx, weather, street);
     drawGlass(ctx, weather);
     drawForeground(ctx);
-    drawSill?.(ctx, t.grid, sillRow(rows));
+    drawSill?.(ctx, t.grid, sillRow(rows), panelCol);
 
     buf.flush(t);
     if (reduced) t.noLoop();

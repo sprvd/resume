@@ -1,384 +1,395 @@
-import { clamp01, mix, scale } from './util.js';
+import { clamp01, lineGlyph, mix, scale } from './util.js';
+import { frameWidth } from './window.js';
+import { pointer } from './pointer.js';
+import { CAT, CLOCK, INK, LEAF, PLANT, SOIL, Pix, blit, drawCatPix, drawClockPix, drawHearts, drawPlantPix } from './sprites.js';
 
-// Things on the sill are pixel art on a canvas over the text scene: one pixel is half a cell,
-// so they carry twice the detail a cell-sized sprite could.
+// The things on the sill: pixel art on a canvas over the text scene (see sprites.js), except the
+// clock's dial, which shows through a window in the case and is drawn in the text grid behind it.
+//
+// Each of them goes through the same cycle: hover (the outline warms up and a name tag appears),
+// press, drag, release, and a reaction that settles back to idle.
+//   cat    stroke it gently (press and move across it) and it purrs; scrub it and it hisses.
+//          A tap gets a "mrrp?" and a few hearts. Its eyes follow the pointer.
+//   clock  grab the dial and wind it round: one turn is an hour and the sky follows.
+//          A tap rings the alarm and skips three hours.
+//   plant  pick it up and carry it along the sill; it lands with a puff of soil.
+//          A tap moves the season on.
 
-// a black cat: flat silhouette with pale ears and eyes
-const FUR = [26, 24, 32];
-const EAR = [228, 220, 226];
-const EYE = [246, 212, 116];
-const PUPIL = [20, 16, 18];
-const WHISKER = [208, 208, 220];
-const INK = [54, 30, 18];
-const TERRACOTTA = [184, 98, 68];
-const LEAF = {
-  winter: [[84, 122, 98], [112, 148, 120]],
-  spring: [[86, 184, 98], [248, 160, 196]],
-  summer: [[52, 162, 80], [96, 202, 94]],
-  autumn: [[204, 124, 40], [230, 176, 58]],
+const DIAL = [240, 234, 214];
+const LABEL = [238, 232, 216];
+const HINT = [150, 152, 166];
+const GLOW = [236, 214, 160];
+const PURR = [196, 188, 220];
+
+const TAGS = {
+  cat: { name: () => 'cat', hint: 'stroke gently' },
+  clock: { name: (sky) => `clock ${fmtTime(sky.hour)}`, hint: 'wind the dial / tap to ring' },
+  plant: { name: (sky) => `plant - ${sky.season}`, hint: 'drag to move / tap: season' },
+};
+// the plant is drawn last, so it wins where things overlap
+const HIT_ORDER = ['plant', 'clock', 'cat'];
+
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+const fmtTime = (h) => {
+  const hh = Math.floor(h) % 24;
+  const mm = Math.floor((h % 1) * 60);
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 };
 
-// cell-unit coordinates below are multiplied by 2 * SCALE to get pixels
-const SCALE = 2.05;
-// visible body width in cell units (tail excluded) and the top of the head, for fitting and hearts
-const WIDTH = 11;
-const HEAD = [4.8, 15];
-
-/** RGBA pixel grid, y up from the bottom edge. */
-class Pix {
-  constructor(w, h) {
-    this.w = w;
-    this.h = h;
-    this.img = new ImageData(w, h);
+/** A line of glyphs in the text grid, centred on `cx`; a dark ground keeps it legible over the city. */
+function caption(buf, cx, r, str, col, a = 1) {
+  const c0 = Math.round(cx - str.length / 2);
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === ' ') continue;
+    buf.tint(c0 + i, r, [0, 0, 0], 0.55 * a);
+    buf.ink(c0 + i, r, str[i], col, a);
+    buf.over(c0 + i, r, ' ', col);
   }
-
-  clear() {
-    this.img.data.fill(0);
-  }
-
-  set(x, y, col, a = 255) {
-    x = Math.floor(x);
-    y = Math.floor(y);
-    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
-    const k = ((this.h - 1 - y) * this.w + x) * 4;
-    const d = this.img.data;
-    if (a >= 255 || d[k + 3] === 0) {
-      d[k] = col[0]; d[k + 1] = col[1]; d[k + 2] = col[2]; d[k + 3] = a;
-    } else {
-      const f = a / 255;
-      d[k] += (col[0] - d[k]) * f; d[k + 1] += (col[1] - d[k + 1]) * f; d[k + 2] += (col[2] - d[k + 2]) * f;
-      d[k + 3] = Math.max(d[k + 3], a);
-    }
-  }
-
-  alphaAt(x, y) {
-    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return 0;
-    return this.img.data[((this.h - 1 - y) * this.w + x) * 4 + 3];
-  }
-
-  /** Dark one-pixel edge around everything drawn so far. */
-  outline(col) {
-    const mark = [];
-    for (let y = -1; y <= this.h; y++) {
-      for (let x = -1; x <= this.w; x++) {
-        if (this.alphaAt(x, y)) continue;
-        if (this.alphaAt(x + 1, y) || this.alphaAt(x - 1, y) || this.alphaAt(x, y + 1) || this.alphaAt(x, y - 1)) mark.push([x, y]);
-      }
-    }
-    for (const [x, y] of mark) this.set(x, y, col);
-  }
-}
-
-/** Shapes in cell units (k converts to pixels), shaded from the upper left and banded like pixel art. */
-function brush(pix, amb, k) {
-  const shade = (col, l, rim) => scale(col, amb * (0.7 + 0.34 * (Math.round(l * 3) / 3)) * (rim ? 0.86 : 1));
-  const cx = (v) => v * k;
-  return {
-    k,
-    shade,
-    ellipse(ex, ey, rx, ry, col, { rot = 0 } = {}) {
-      ex = cx(ex); ey = cx(ey); rx = cx(rx); ry = cx(ry);
-      const m = Math.max(rx, ry) + 1;
-      const cos = Math.cos(rot);
-      const sin = Math.sin(rot);
-      for (let y = Math.floor(ey - m); y <= ey + m; y++) {
-        for (let x = Math.floor(ex - m); x <= ex + m; x++) {
-          const dx = x + 0.5 - ex;
-          const dy = y + 0.5 - ey;
-          const nx = (dx * cos + dy * sin) / rx;
-          const ny = (-dx * sin + dy * cos) / ry;
-          const e = nx * nx + ny * ny;
-          if (e > 1) continue;
-          pix.set(x, y, shade(col, clamp01(0.55 - nx * 0.28 + ny * 0.5 - e * 0.25), e > 0.8));
-        }
-      }
-    },
-    tri(a, b, c, col) {
-      const [A, B, C] = [a, b, c].map(([x, y]) => [cx(x), cx(y)]);
-      const sign = (p, q, r) => (p[0] - r[0]) * (q[1] - r[1]) - (q[0] - r[0]) * (p[1] - r[1]);
-      const x0 = Math.floor(Math.min(A[0], B[0], C[0]));
-      const x1 = Math.ceil(Math.max(A[0], B[0], C[0]));
-      const y0 = Math.floor(Math.min(A[1], B[1], C[1]));
-      const y1 = Math.ceil(Math.max(A[1], B[1], C[1]));
-      for (let y = y0; y <= y1; y++) {
-        for (let x = x0; x <= x1; x++) {
-          const p = [x + 0.5, y + 0.5];
-          const d1 = sign(p, A, B);
-          const d2 = sign(p, B, C);
-          const d3 = sign(p, C, A);
-          if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) {
-            pix.set(x, y, shade(col, clamp01((y - y0) / (y1 - y0 + 1) + 0.2), false));
-          }
-        }
-      }
-    },
-    /** Pointed ears, mirrored around x = `mirror` / 2, with a pale inner triangle. */
-    ears(outer, mirror, inner) {
-      const flip = (t) => t.map(([x, y]) => [mirror - x, y]);
-      this.tri(...outer, FUR);
-      this.tri(...flip(outer), FUR);
-      // the pale insides stay bright even at night
-      const pale = scale(EAR, Math.max(amb, 0.9) / amb);
-      this.tri(...inner, pale);
-      this.tri(...flip(inner), pale);
-    },
-    px(x, y, col, a = 255) {
-      pix.set(x, y, col, a);
-    },
-    /** Tail as a string of round segments. */
-    tail(points, r) {
-      for (const [x, y] of points) this.ellipse(x, y, r, r, FUR);
-    },
-    // details drawn on top of the outline, like whiskers that stick out past the head
-    after: [],
-  };
-}
-
-/** Eyes and whiskers. */
-function face(g, x, y, { blink, happy }) {
-  const u = g.k;
-  // the face is mirrored around the line between pixel columns px - 1 and px
-  const px = Math.round(x * u);
-  const py = Math.round(y * u);
-  const gap = Math.round(0.75 * u);
-  const lid = scale(EYE, 0.55);
-  // eyes: 6 wide, 3 tall, from the outer corner inwards; row 0 is the bottom
-  // the flat top makes them look half-closed and a little smug; the pupils sit towards the nose
-  const eye = (rows, col) => rows.forEach((row, r) => [...row].forEach((ch, c) => {
-    const k = { Y: col, P: PUPIL, H: [255, 252, 240], L: lid }[ch];
-    if (!k) return;
-    g.px(px - gap - 6 + c, py + 2 - r, k);
-    g.px(px + gap + 5 - c, py + 2 - r, k);
-  }));
-  if (happy) eye(['......', '.LLLL.', 'L....L'], EYE);
-  else if (!blink) eye(['YYYHPY', 'YYYYPY', '.YYYY.'], EYE);
-  else eye(['......', 'L....L', '.LLLL.'], EYE);
-  g.after.push(() => {
-    // whiskers fan out past the cheeks
-    for (let i = 0; i < 7; i++) {
-      for (const s of [-1, 1]) {
-        const c = s < 0 ? px - 1 - gap - 3 - i : px + gap + 3 + i;
-        g.px(c, py - 4 + (i > 3 ? 1 : 0), WHISKER, 170 - i * 14);
-        g.px(c, py - 6 - (i > 3 ? 1 : 0), WHISKER, 130 - i * 12);
-      }
-    }
-  });
-}
-
-/** Wide skull with fuller cheeks below it. */
-function head(g, x, y, rx, ry) {
-  g.ellipse(x, y + ry * 0.12, rx * 0.92, ry, FUR);
-  g.ellipse(x, y - ry * 0.25, rx, ry * 0.7, FUR);
-}
-
-/** The cat sits facing out, tail curled up beside it. */
-function sit(g, t, breath, blink, happy) {
-  // the tip of the tail flicks
-  const flick = Math.sin(t * 2.2) * 0.35;
-  g.tail([
-    [6.6, 0.55], [7.5, 0.6], [8.4, 0.75], [9.2, 1.1], [9.8, 1.7], [10.2, 2.4], [10.4, 3.2], [10.5, 4.0],
-    [10.5 + flick * 0.5, 4.8], [10.4 + flick, 5.5],
-  ], 0.62);
-  g.ellipse(4.8, 2.4, 3.3, 2.4, FUR); // haunches
-  g.ellipse(4.8, 4.9, 2.7, 4.0 + breath * 0.5, FUR);
-  head(g, 4.8, 9.6, 3.6, 2.8);
-  g.ears([[1.3, 10.6], [1.8, 14.8], [4.3, 12.2]], 9.6, [[1.9, 11.4], [2.2, 13.9], [3.6, 12.0]]);
-  face(g, 4.8, 9.4, { blink, happy });
-}
-
-// state shared by the click handlers and the draw loop
-const st = { tapAt: -99, plantShake: -99, clockShake: -99 };
-const HAPPY_FOR = 2.4;
-
-function drawCat(ctx, pix, amb) {
-  const { time, clock } = ctx;
-  const g = brush(pix, amb, 2 * SCALE * (ctx.catFit ?? 1));
-  const react = Math.max(0, 1 - (time - st.tapAt) / HAPPY_FOR);
-  const breath = 0.16 * Math.sin(time * 2.3) + react * 0.12 * Math.sin(time * 9);
-  const blink = (time * 0.2) % 1 > 0.97;
-  pix.clear();
-  sit(g, react ? time * 3 : time, breath, blink, react > 0);
-  // a faint edge of moonlight at night, so the black cat never melts into the dark
-  pix.outline(mix([70, 76, 112], [40, 36, 44], clock.daylight));
-  for (const f of g.after) f();
-  // tight bounds of what was drawn, for hit-testing
-  let x0 = pix.w, x1 = 0, y0 = pix.h, y1 = 0;
-  for (let y = 0; y < pix.h; y++) for (let x = 0; x < pix.w; x++) if (pix.alphaAt(x, y)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-  return { k: g.k, react, bounds: [x0, y0, x1, y1] };
-}
-
-function line(pix, x0, y0, x1, y1, col) {
-  const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) || 1;
-  for (let i = 0; i <= n; i++) pix.set(x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n, col);
-}
-
-/** Alarm clock whose hands follow the sky. */
-function drawClockPix(pix, amb, hour, ring) {
-  pix.clear();
-  const body = scale([196, 74, 72], amb);
-  const face = scale([240, 234, 214], Math.max(amb, 0.75));
-  const cx = 8;
-  const cy = 9;
-  for (let y = 0; y < 18; y++) {
-    for (let x = 0; x < 16; x++) {
-      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-      if (d < 7.6) pix.set(x, y, d < 5.6 ? face : scale(body, 0.82 + 0.25 * clamp01(1 - x / 16)));
-    }
-  }
-  // bells and feet
-  for (const s of [-1, 1]) {
-    for (const [dx, dy] of [[4, 16], [5, 16], [4, 17], [5, 17], [6, 16], [3, 15]]) pix.set(cx + s * dx - (s > 0 ? 1 : 0), dy, scale(body, 1.1));
-    pix.set(cx + s * 4 - (s > 0 ? 1 : 0), 0, scale(INK, 1.6));
-    pix.set(cx + s * 4 - (s > 0 ? 1 : 0), 1, scale(INK, 1.6));
-  }
-  pix.set(cx - 1, 17, INK); pix.set(cx, 17, INK);
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    pix.set(cx - 0.5 + Math.sin(a) * 4.6, cy - 0.5 + Math.cos(a) * 4.6, i % 3 ? scale(INK, 2) : INK);
-  }
-  const ha = ((hour % 12) / 12) * Math.PI * 2;
-  const ma = (hour % 1) * Math.PI * 2;
-  line(pix, cx, cy, cx + Math.sin(ha) * 3, cy + Math.cos(ha) * 3, INK);
-  line(pix, cx, cy, cx + Math.sin(ma) * 4.4, cy + Math.cos(ma) * 4.4, scale([120, 50, 50], 1));
-  pix.set(cx, cy, INK);
-  pix.outline(scale(INK, amb));
-  if (ring) pix.set(1, 17, [255, 220, 120]), pix.set(14, 17, [255, 220, 120]);
-}
-
-function drawPlantPix(pix, amb, season, time) {
-  const [leaf, accent] = LEAF[season];
-  pix.clear();
-  const g = brush(pix, amb, 1);
-  const sway = Math.sin(time * 0.9) * 0.06;
-  // pot
-  for (let y = 0; y < 9; y++) {
-    const half = y === 8 ? 8 : 7 - Math.floor((8 - y) * 0.15);
-    for (let x = 16 - half; x < 16 + half; x++) pix.set(x, y, scale(TERRACOTTA, amb * (y === 8 ? 1.18 : 0.8 + 0.25 * clamp01(1 - (x - 8) / 16))));
-  }
-  for (let x = 10; x < 22; x++) pix.set(x, 7, scale([72, 48, 34], amb)); // soil
-  // leaves fan out from the soil
-  const leaves = [[-1.3, 8.5], [-0.85, 11], [-0.4, 13], [0.05, 14], [0.5, 12.5], [0.95, 10.5], [1.35, 8], [-0.15, 9.5]];
-  leaves.forEach(([a, len], i) => {
-    const ang = a + sway * (1 + i * 0.1);
-    const tx = 16 + Math.sin(ang) * len;
-    const ty = 8 + Math.cos(ang) * len;
-    // stem
-    for (let s = 0; s <= 1; s += 0.05) pix.set(16 + (tx - 16) * s, 8 + (ty - 8) * s, scale(mix(leaf, [30, 80, 40], 0.4), amb));
-    g.ellipse(tx, ty, 1.5, 3.6, i % 2 ? accent === leaf ? leaf : mix(leaf, [255, 255, 255], 0.12) : leaf, { rot: -ang });
-  });
-  // a bloom (or berries, or a bare tip)
-  const bx = 16 + Math.sin(sway * 2) * 2;
-  if (season !== 'winter') for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) pix.set(bx + dx, 22 + dy, scale(dx || dy ? accent : [250, 224, 120], amb));
-  pix.outline(scale(INK, amb * 0.9));
-}
-
-const HEART = ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'];
-
-function drawHearts(c2, x, y, P, p0) {
-  for (let i = 0; i < 3; i++) {
-    const p = p0 - i * 0.16;
-    if (p <= 0 || p >= 1) continue;
-    c2.globalAlpha = Math.min(1, (1 - p) * 1.6);
-    c2.fillStyle = '#ff7a9a';
-    const hx = x + (i - 1) * 7 * P + Math.sin(p * 7 + i) * 2 * P;
-    const hy = y - p * 22 * P;
-    HEART.forEach((row, r) => [...row].forEach((ch, cc) => ch === '#' && c2.fillRect(Math.round(hx + cc * P), Math.round(hy + r * P), P, P)));
-  }
-  c2.globalAlpha = 1;
-}
-
-function blit(c2, pix, x, bottom, P, { sy = 1, dx = 0, dy = 0 } = {}) {
-  if (!pix.off) {
-    pix.off = document.createElement('canvas');
-    pix.off.width = pix.w;
-    pix.off.height = pix.h;
-  }
-  pix.off.getContext('2d').putImageData(pix.img, 0, 0);
-  const h = Math.round(pix.h * P * sy);
-  c2.drawImage(pix.off, Math.round(x + dx), Math.round(bottom - h + dy), pix.w * P, h);
 }
 
 /**
- * Overlay canvas for the sill. The cat purrs when tapped, the clock skips ahead through the day and
- * the plant steps through the seasons. `actions` come from the scene.
+ * The dial behind the clock's window, in cells around (cc, rc): hour dots, the four numerals,
+ * hour and minute hands that follow the sky, and a seconds dot on real time. `rad` is the window
+ * radius in cells; `warm` (0…1) lights it up under the pointer.
+ */
+function drawDial(buf, cc, rc, rad, hour, amb, warm) {
+  const face = mix(scale(DIAL, Math.max(amb, 0.78)), GLOW, warm * 0.25);
+  const bg = scale(face, 0.62);
+  const ink = scale(INK, 1.2);
+  const reach = Math.ceil(rad + 0.7);
+  for (let r = rc - reach; r <= rc + reach; r++) {
+    for (let c = cc - reach; c <= cc + reach; c++) {
+      if (Math.hypot(c - cc, r - rc) <= rad + 0.7) buf.put(c, r, ' ', face, bg);
+    }
+  }
+  const at = (a, s) => [Math.round(cc + Math.sin(a) * s), Math.round(rc - Math.cos(a) * s)];
+  for (let i = 0; i < 12; i++) {
+    if (i % 3 === 0) continue;
+    const [c, r] = at((i / 12) * Math.PI * 2, rad - 1.3);
+    buf.put(c, r, '.', scale(ink, 1.6), bg);
+  }
+  // numerals and the minute hand stay well inside the window, clear of the lip
+  const n = Math.floor(rad - 1.4);
+  for (const [s, c, r] of [['12', cc - 1, rc - n], ['3', cc + n, rc], ['6', cc, rc + n], ['9', cc - n, rc]]) {
+    for (let i = 0; i < s.length; i++) buf.put(c + i, r, s[i], ink, bg);
+  }
+  const hand = (a, len, col) => {
+    for (let s = 0.7; s <= len; s += 0.5) {
+      const [c, r] = at(a, s);
+      buf.put(c, r, lineGlyph(a), col, bg);
+    }
+  };
+  hand(((hour % 12) / 12) * Math.PI * 2, Math.max(1.2, rad * 0.45), ink);
+  hand((hour % 1) * Math.PI * 2, n, [140, 48, 44]);
+  const [sc, sr] = at(((Date.now() / 1000) % 60) / 60 * Math.PI * 2, n + 0.4);
+  buf.put(sc, sr, '.', [210, 60, 50], bg);
+  buf.put(cc, rc, 'o', ink, bg);
+}
+
+/**
+ * Overlay canvas for the sill, the interaction cycle of the things on it and the bits that fly
+ * off them. `actions` come from the scene: `time()`, `skipHours(h, instant)`, `nextSeason()`.
  */
 export function createSill(canvas, actions) {
   const c2 = canvas.getContext('2d');
-  c2.imageSmoothingEnabled = false;
-  const cat = new Pix(64, 84);
-  const clockPix = new Pix(16, 19);
-  const plant = new Pix(32, 26);
-  let panelLeft = null;
-  let hits = []; // { id, x, y, w, h } in CSS px, rebuilt every frame
+  const cat = { pix: new Pix(CAT.w, CAT.h), hit: null, pet: 0, annoy: 0, purrIn: 0, heartIn: 0, hearts: [], mrrpAt: -99, hissAt: -99, blinkAt: -99 };
+  const clock = { pix: new Pix(CLOCK.w, CLOCK.h), hit: null, col: 0, cx: 0, cy: 0, angle: 0, ringAt: -99, ringFor: 0 };
+  const plant = { pix: new Pix(PLANT.w, PLANT.h), hit: null, x: null, lift: 0, lean: 0, rustle: 0, landAt: -99, shakeAt: -99 };
+  const objects = { cat, clock, plant };
 
-  const hitAt = (e) => {
-    if (e.target.closest?.('.head, .prose, .actions, button, a, .unhide')) return null;
-    return hits.find((h) => e.clientX >= h.x && e.clientX <= h.x + h.w && e.clientY >= h.y && e.clientY <= h.y + h.h)?.id ?? null;
-  };
+  let parts = []; // glyphs flying off things: "prr", soil, leaves, "RING"
+  let hover = null;
+  let hoverA = 0;
+  let press = null; // { id, x0, y0, moved, lastX, lastY, grabDx }
+  let cursor = '';
+  let enabled = false;
+  let laidOutFor = 0;
 
-  window.addEventListener('pointermove', (e) => {
-    document.documentElement.style.cursor = hitAt(e) ? 'pointer' : '';
-  });
-  window.addEventListener('pointerdown', (e) => {
-    const id = hitAt(e);
+  const hitAt = (x, y) =>
+    HIT_ORDER.find((id) => {
+      const h = objects[id].hit;
+      return h && x >= h.c0 && x <= h.c1 && y >= h.r0 && y <= h.r1;
+    }) ?? null;
+
+  const spawn = (p) => parts.push({ vx: 0, vy: 0, g: 0, age: 0, life: 1, ...p });
+
+  // ---- input: press on a thing, then the frame loop follows the pointer until release
+
+  addEventListener('pointerdown', (e) => {
+    if (!enabled || pointer.overUi || e.button > 0) return;
+    const id = hitAt(pointer.x, pointer.y);
     if (!id) return;
-    if (id === 'cat') {
-      st.tapAt = actions.time();
+    e.preventDefault();
+    press = { id, x0: pointer.x, y0: pointer.y, moved: false, lastX: pointer.x, lastY: pointer.y, grabDx: pointer.x - (plant.x ?? 0) };
+    if (id === 'clock') clock.angle = Math.atan2(pointer.x - clock.cx, clock.cy - pointer.y);
+  });
+  // keep a touch that starts on one of them from scrolling the page
+  for (const type of ['touchstart', 'touchmove']) addEventListener(type, (e) => press && e.preventDefault(), { passive: false });
+
+  const release = () => {
+    if (!press) return;
+    const t = actions.time();
+    const { id, moved } = press;
+    press = null;
+    if (id === 'cat' && !moved && t - cat.hissAt > 2) {
+      cat.mrrpAt = t;
+      cat.blinkAt = t + 0.4;
+      cat.hearts.push(t);
     } else if (id === 'clock') {
-      st.clockShake = actions.time();
-      actions.skipHours(3);
+      clock.ringAt = t;
+      clock.ringFor = moved ? 0.5 : 1.4;
+      if (!moved) actions.skipHours(3);
+    } else if (id === 'plant' && moved) {
+      plant.landAt = t;
+      plant.dust = true;
     } else if (id === 'plant') {
-      st.plantShake = actions.time();
+      plant.shakeAt = t;
+      plant.burst = true;
       actions.nextSeason();
     }
-  });
+  };
+  for (const type of ['pointerup', 'pointercancel', 'blur']) addEventListener(type, release);
 
-  return function drawSill(ctx, grid, sillTop) {
+  /** Per-frame work for the press in progress: strokes, winding, carrying. */
+  function drive(t, dt, cols, ft, plantCells) {
+    if (!press) return;
+    const dx = pointer.x - press.lastX;
+    const dy = pointer.y - press.lastY;
+    press.lastX = pointer.x;
+    press.lastY = pointer.y;
+    if (!press.moved && Math.hypot(pointer.x - press.x0, pointer.y - press.y0) > 1.2) press.moved = true;
+    if (!press.moved) return;
+
+    if (press.id === 'cat') strokeCat(t, dt, Math.hypot(dx, dy));
+    else if (press.id === 'clock') windClock();
+    else carryPlant(dt, cols, ft, plantCells);
+  }
+
+  // gentle strokes build up the purr; scrubbing fast annoys the cat until it hisses
+  function strokeCat(t, dt, dist) {
+    if (t - cat.hissAt < 2 || hitAt(pointer.x, pointer.y) !== 'cat') return;
+    if (dist / Math.max(dt, 1e-3) > 70) cat.annoy += dt * 1.6;
+    else cat.pet = Math.min(1.3, cat.pet + Math.min(dist, 40 * dt) * 0.02);
+    if (cat.annoy <= 1) return;
+    Object.assign(cat, { hissAt: t, pet: 0, annoy: 0 });
+    spawn({ x: cat.hit.c0 + 4, y: cat.hit.r0 - 1, text: 'hss!', col: [255, 120, 100], vy: -2, life: 1.2 });
+    press = null;
+  }
+
+  // one turn round the dial is an hour, and the sky follows
+  function windClock() {
+    const a = Math.atan2(pointer.x - clock.cx, clock.cy - pointer.y);
+    const d = ((a - clock.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    clock.angle = a;
+    actions.skipHours(d / (Math.PI * 2), true);
+    if (Math.abs(d) > 0.05 && Math.random() < 0.3) spawn({ x: clock.cx + rnd(-4, 3), y: clock.hit.r0 - 1, text: 'tk', col: [200, 196, 180], vy: -3, life: 0.5 });
+  }
+
+  function carryPlant(dt, cols, ft, plantCells) {
+    const x = Math.max(ft + 1, Math.min(cols - ft - 1 - plantCells, pointer.x - press.grabDx));
+    // the leaves trail behind the way it is carried
+    plant.lean += ((x - plant.x) * 0.06 - plant.lean) * Math.min(1, dt * 10);
+    plant.x = x;
+  }
+
+  // ---- drawing; `f` is the frame layout: canvas scale, the grid and where the sill is
+
+  function drawCat(f) {
+    const { ctx, sky, t, dt, P, bottom, ox, cw, ft } = f;
+    const x = ox + (ft + 2) * cw;
+    // shrink a little if the text column would cover most of it
+    const fit = Math.max(0.85, Math.min(1.15, (f.panelPx - x) / (CAT.WIDTH * CAT.k * P)));
+    const k = CAT.k * fit;
+    const hiss = Math.max(0, 1 - (t - cat.hissAt) / 2);
+    const purr = hiss ? 0 : clamp01((cat.pet - 0.2) / 0.4);
+    const tapped = Math.max(0, 1 - (t - cat.mrrpAt) / 1.6);
+    const look = pointer.inside && !pointer.overUi && cat.hit
+      ? Math.max(-1, Math.min(1, (pointer.x - (cat.hit.c0 + cat.hit.c1) / 2) / 14))
+      : null;
+    drawCatPix(cat.pix, f.amb, k, {
+      t,
+      // purring only deepens the breath; the body itself stays put
+      breath: 0.16 * Math.sin(t * 2.3) + purr * 0.05 * Math.sin(t * 9),
+      ears: hiss ? -1 : hover === 'cat' ? 1 : 0,
+      lash: hiss,
+      eyes: {
+        happy: purr > 0 || (tapped > 0 && tapped < 0.75),
+        blink: (t * 0.2) % 1 > 0.97 || (t > cat.blinkAt && t - cat.blinkAt < 0.35),
+        wide: hiss > 0,
+        look,
+      },
+      // a faint edge of moonlight at night, so the black cat never melts into the dark
+      edge: f.edge('cat', mix([70, 76, 112], [40, 36, 44], sky.daylight)),
+    });
+    blit(c2, cat.pix, x, bottom, P);
+    const b = cat.pix.bounds();
+    cat.hit = f.toCells(x + b[0] * P, bottom - (b[3] + 1) * P, (b[2] - b[0] + 1) * P, (b[3] - b[1] + 1) * P);
+    const headX = x + CAT.HEAD[0] * k * P;
+    const headY = bottom - CAT.HEAD[1] * k * P;
+    const headCol = (headX - ox) / cw;
+
+    // purring sends up little "prr"s, and a long gentle stroke a few hearts
+    if (purr) {
+      cat.purrIn -= dt;
+      if (cat.purrIn <= 0) {
+        spawn({ x: headCol + rnd(3, 9), y: cat.hit.r0 + 2, text: Math.random() < 0.5 ? 'prr' : 'rrr', col: PURR, vy: -2.2, vx: rnd(0.5, 1.5), life: 1.4 });
+        cat.purrIn = 0.5;
+      }
+      cat.heartIn -= dt;
+      if (cat.pet > 0.9 && cat.heartIn <= 0) {
+        cat.hearts.push(t);
+        cat.heartIn = 1.2;
+      }
+    }
+    cat.hearts = cat.hearts.filter((s) => t - s < 2.4);
+    for (const s of cat.hearts) drawHearts(c2, headX, headY, P, (t - s) / 2.4);
+    if (tapped) caption(ctx.buf, headCol + 1, Math.floor(cat.hit.r0) - 2, 'mrrp?', LABEL, Math.min(1, tapped * 3));
+    // the purr fades when no one strokes it, the annoyance too
+    if (press?.id !== 'cat') cat.pet = Math.max(0, cat.pet - dt * 0.3);
+    cat.annoy = Math.max(0, cat.annoy - dt * 0.5);
+    // the cat's own voice takes the place of its tag
+    return { cx: headCol + 1, quiet: tapped > 0 || purr > 0 || hiss > 0 };
+  }
+
+  function drawClock(f) {
+    const { ctx, sky, t, P, bottom, ox, oy, cw, ch } = f;
+    const ringing = t - clock.ringAt < clock.ringFor;
+    // the dial's centre falls on the middle of a cell so the text dial lines up with the window;
+    // the clock may sink a few pixels into the sill for it
+    const row = Math.round((bottom - CLOCK.cy * P - oy) / ch - 0.5);
+    const x = ox + (clock.col + 0.5) * cw - CLOCK.cx * P;
+    const base = oy + (row + 0.5) * ch + CLOCK.cy * P;
+    drawDial(ctx.buf, clock.col, row, (CLOCK.dial * P) / cw, sky.hour, f.amb, hover === 'clock' ? hoverA : 0);
+    drawClockPix(clock.pix, f.amb, ringing, f.edge('clock', scale(INK, f.amb)));
+    blit(c2, clock.pix, x, base, P, { dx: ringing ? Math.round(Math.sin((t - clock.ringAt) * 40) * P) : 0 });
+    clock.cx = clock.col + 0.5;
+    clock.cy = row + 0.5;
+    clock.hit = f.toCells(x, base - CLOCK.h * P, CLOCK.w * P, CLOCK.h * P);
+    if (ringing && Math.random() < 0.35) {
+      const s = Math.random() < 0.5 ? -1 : 1;
+      spawn({ x: clock.cx + s * rnd(5, 8), y: clock.hit.r0, text: Math.random() < 0.5 ? 'RING' : '!', col: [255, 220, 120], vx: s * 3, vy: -3, life: 0.6 });
+    }
+    return { cx: clock.cx };
+  }
+
+  function drawPlant(f) {
+    const { ctx, sky, t, dt, P, bottom, ox, cw, ch, plantCells } = f;
+    const carried = press?.id === 'plant' && press.moved;
+    plant.lift += ((carried ? 1 : 0) - plant.lift) * Math.min(1, dt * 14);
+    if (!carried) plant.lean *= Math.exp(-dt * 3);
+    plant.rustle += ((hover === 'plant' ? 1 : 0) - plant.rustle) * Math.min(1, dt * 5);
+    const shake = Math.max(0, 1 - (t - plant.shakeAt) / 0.8);
+    const since = t - plant.landAt;
+    const hop = since < 0.35 ? Math.sin((since / 0.35) * Math.PI) * 3 * P : 0;
+    const lift = plant.lift * 2.2 * ch + hop;
+    const x = ox + plant.x * cw;
+    const mid = plant.x + plantCells / 2;
+    // its shadow stays on the sill while it is up in the air
+    if (plant.lift > 0.2) for (let c = Math.round(plant.x + 1); c < plant.x + plantCells - 1; c++) ctx.buf.tint(c, f.sillTop, [0, 0, 0], 0.5 * plant.lift);
+    const lean = -plant.lean + plant.rustle * Math.sin(t * 9) * 0.05 + shake * Math.sin(t * 30) * 0.25;
+    drawPlantPix(plant.pix, f.amb, sky.season, t, lean, f.edge('plant', scale(INK, f.amb * 0.9)));
+    blit(c2, plant.pix, x, bottom, P, { dy: -lift });
+    plant.hit = f.toCells(x + 3 * P, bottom - lift - 25 * P, 26 * P, 25 * P);
+    // a puff of soil when it lands, a flurry of leaves when the season turns
+    if (plant.dust) {
+      plant.dust = false;
+      for (let i = 0; i < 10; i++) spawn({ x: mid + rnd(-6, 6), y: f.sillTop - 1, text: ".,'"[i % 3], col: scale(SOIL, 2.4), vx: rnd(-7, 7), vy: rnd(-5, -2), g: 18, life: 0.6 });
+    }
+    if (plant.burst) {
+      plant.burst = false;
+      const leaves = LEAF[sky.season];
+      for (let i = 0; i < 14; i++) spawn({ x: mid + rnd(-5, 5), y: plant.hit.r0 + rnd(0, 5), text: ",'`"[i % 3], col: leaves[i % leaves.length], vx: rnd(-6, 6), vy: rnd(-6, -1), g: 6, life: 1.6, flutter: true });
+    }
+    return { cx: mid };
+  }
+
+  function drawParts(buf, dt) {
+    for (const p of parts) {
+      p.age += dt;
+      p.vy += p.g * dt;
+      p.x += (p.vx + (p.flutter ? Math.sin(p.age * 8) * 3 : 0)) * dt;
+      p.y += p.vy * dt;
+      p.vx *= Math.exp(-dt * 1.5);
+      const a = Math.min(1, clamp01(1 - p.age / p.life) * 1.4);
+      for (let i = 0; i < p.text.length; i++) buf.ink(Math.round(p.x) + i, Math.round(p.y), p.text[i], p.col, a);
+    }
+    parts = parts.filter((p) => p.age < p.life);
+  }
+
+  /** Canvas scale and where things stand this frame. */
+  function layout(ctx, grid, sillTop, panelCol) {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cw = grid.cellWidth * dpr;
+    const ch = grid.cellHeight * dpr;
+    const ox = grid.offsetX * dpr;
+    const oy = grid.offsetY * dpr;
+    // sprites keep the size they had when cells were ~innerWidth / 120 wide
+    const P = Math.max(1, Math.floor((Math.max(10, Math.min(22, Math.round(innerWidth / 120))) * dpr) / 2));
+    const amb = 0.6 + 0.4 * clamp01(ctx.clock.daylight + 0.15);
+    return {
+      ctx, sky: ctx.clock, t: ctx.time, dt: ctx.dt,
+      dpr, cw, ch, ox, oy, P, amb, sillTop,
+      bottom: oy + sillTop * ch,
+      ft: frameWidth(ctx.cols),
+      panelPx: (grid.offsetX + panelCol * grid.cellWidth) * dpr,
+      plantCells: (PLANT.w * P) / cw,
+      /** A canvas-pixel rectangle as a cell rectangle, for hit-testing against the pointer. */
+      toCells: (x, y, w, h) => ({ c0: (x - ox) / cw, r0: (y - oy) / ch, c1: (x + w - ox) / cw, r1: (y + h - oy) / ch }),
+      /** Outline colour: warmer while the pointer is on it. */
+      edge: (id, base) => (hover === id ? mix(base, GLOW, 0.75 * hoverA) : base),
+    };
+  }
+
+  return function drawSill(ctx, grid, sillTop, panelCol) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.round(innerWidth * dpr);
     const h = Math.round(innerHeight * dpr);
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
-      panelLeft = null;
     }
     c2.setTransform(1, 0, 0, 1, 0, 0);
     c2.imageSmoothingEnabled = false;
     c2.clearRect(0, 0, w, h);
-    hits = [];
-    if (ctx.cols < 64) return;
+    // the sill is too cramped on phones; the scene stays a view
+    enabled = innerWidth >= 700;
+    if (!enabled) {
+      hover = press = null;
+      return;
+    }
 
-    const { clock, time, cols } = ctx;
-    const cw = grid.cellWidth * dpr;
-    const P = Math.max(1, Math.floor(cw / 2));
-    const ox = grid.offsetX * dpr;
-    const bottom = (grid.offsetY + sillTop * grid.cellHeight) * dpr;
-    const ft = cols > 80 ? 2 : 1;
-    const amb = 0.6 + 0.4 * clamp01(clock.daylight + 0.15);
-    const addHit = (id, x, y, bw, bh) => hits.push({ id, x: x / dpr, y: y / dpr, w: bw / dpr, h: bh / dpr });
+    const f = layout(ctx, grid, sillTop, panelCol);
+    const { cols } = ctx;
+    // where things stand by default; a resize puts them back
+    if (laidOutFor !== cols) {
+      plant.x = cols - f.ft - 9 - f.plantCells / 2;
+      clock.col = Math.round(plant.x - (CLOCK.w * f.P * 0.5 + 2 * f.P) / f.cw - 1);
+      laidOutFor = cols;
+    }
 
-    // shrink the cat a little if the text column would cover most of it
-    if (panelLeft === null) panelLeft = document.querySelector('.head')?.getBoundingClientRect().left ?? innerWidth;
-    const avail = (panelLeft - grid.offsetX) * dpr - (ft + 2) * cw;
-    ctx.catFit = Math.max(0.85, Math.min(1.15, avail / (WIDTH * SCALE * cw)));
+    drive(f.t, f.dt, cols, f.ft, f.plantCells);
+    const now = press ? press.id : pointer.inside && !pointer.overUi ? hitAt(pointer.x, pointer.y) : null;
+    if (now !== hover) {
+      hover = now;
+      hoverA = 0;
+    }
+    hoverA = Math.min(1, hoverA + f.dt * 6);
 
-    const { k, react, bounds } = drawCat(ctx, cat, amb);
-    const catX = ox + (ft + 2) * cw;
-    const hopT = time - st.tapAt;
-    blit(c2, cat, catX, bottom, P);
-    addHit('cat', catX + bounds[0] * P, bottom - (bounds[3] + 1) * P, (bounds[2] - bounds[0] + 1) * P, (bounds[3] - bounds[1] + 1) * P);
-    const [hx, hy] = HEAD;
-    if (react > 0) drawHearts(c2, catX + hx * k * P, bottom - hy * k * P, P, hopT / HAPPY_FOR);
+    const anchors = { cat: drawCat(f), clock: drawClock(f), plant: drawPlant(f) };
+    drawParts(ctx.buf, f.dt);
 
-    // clock and plant, right-aligned clear of the text column
-    const wobble = (since, amp) => (time - since < 0.6 ? Math.round(Math.sin((time - since) * 40) * amp * (1 - (time - since) / 0.6) * P) : 0);
-    const plantX = ox + (cols - ft - 9) * cw - plant.w * P * 0.5;
-    const clockX = plantX - 14 * P;
-    drawClockPix(clockPix, amb, clock.hour, time - st.clockShake < 0.6);
-    blit(c2, clockPix, clockX, bottom, P, { dx: wobble(st.clockShake, 1) });
-    addHit('clock', clockX, bottom - clockPix.h * P, clockPix.w * P, clockPix.h * P);
-    drawPlantPix(plant, amb, clock.season, time + (time - st.plantShake < 0.6 ? Math.sin((time - st.plantShake) * 30) * 0.6 : 0));
-    blit(c2, plant, plantX, bottom, P);
-    addHit('plant', plantX + 3 * P, bottom - 25 * P, 26 * P, 25 * P);
+    if (hover && !anchors[hover].quiet) {
+      const top = Math.floor(objects[hover].hit.r0);
+      const tag = TAGS[hover];
+      caption(ctx.buf, anchors[hover].cx, top - 3, tag.name(f.sky), LABEL, hoverA);
+      caption(ctx.buf, anchors[hover].cx, top - 2, tag.hint, HINT, hoverA * 0.9);
+    }
+
+    const want = press ? (press.id === 'cat' ? 'grab' : 'grabbing') : hover ? (hover === 'plant' ? 'grab' : 'pointer') : '';
+    if (want !== cursor) {
+      cursor = want;
+      document.documentElement.style.cursor = want;
+    }
   };
 }
